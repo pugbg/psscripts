@@ -1,0 +1,56 @@
+[CmdletBinding()]
+param
+(
+    [Parameter(Mandatory, ValueFromPipeline)]
+    [System.IO.FileInfo[]]$File
+)
+begin
+{
+    class commandUsage
+    {
+        [string]$Name
+        [string]$Type
+        [string]$Source
+        [int]$Count = 0
+    }
+    $result = [System.Collections.Generic.Dictionary[string, commandUsage]]::new()
+}
+process
+{
+    foreach ($f in $File)
+    {
+        $script = Get-Command -Name $f.FullName
+        Get-AstStatement -Ast $script.ScriptBlock.Ast -Type CommandAst | ForEach-Object -Process {
+            $commandName = $_.GetCommandName()
+            if ($result.ContainsKey($commandName))
+            {
+                $result[$commandName].Count++
+            }
+            else
+            {
+                $commandUsage = [commandUsage]::new()
+                $commandUsage.Name = $commandName
+                $commandUsage.Count++
+
+                #Resolve source
+                try
+                {
+                    $cmdFound = Get-Command -Name $commandName -ErrorAction Stop
+                    $commandUsage.Type = $cmdFound.CommandType
+                    $commandUsage.Source = $cmdFound.Source
+                }
+                catch
+                {
+                    $commandUsage.Source = 'Unknown'
+                }
+
+                #Append to result
+                $result.Add($commandName,$commandUsage)
+            }
+        }
+    }
+}
+end
+{
+    $result.Values
+}
